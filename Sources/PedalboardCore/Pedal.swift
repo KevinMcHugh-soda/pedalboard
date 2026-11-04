@@ -67,8 +67,32 @@ public final class Pedal {
     }
 
     public func setLive(_ live: Bool, for device: InputDevice) {
-        store.liveOverrides[device.uid] = live
+        var overrides = store.liveOverrides
+        if live, isOneLiveMic {
+            // Every other mic, present or unplugged, stops being live — so a
+            // remembered USB mic doesn't come back live when it reappears.
+            for other in devices where other.uid != device.uid { overrides[other.uid] = false }
+            for uid in overrides.keys where uid != device.uid { overrides[uid] = false }
+        }
+        overrides[device.uid] = live
+        store.liveOverrides = overrides
         reconcile()
+    }
+
+    /// When on, making a mic live makes it the only live mic.
+    public var isOneLiveMic: Bool { store.isOneLiveMic }
+
+    /// Turning it on with several mics live keeps one: the built-in mic if it
+    /// is live, otherwise the first live mic.
+    public func setOneLiveMic(_ on: Bool) {
+        store.isOneLiveMic = on
+        guard on else { return reconcile() }
+        let live = devices.filter(isLive)
+        if let keep = live.first(where: \.isBuiltIn) ?? live.first {
+            setLive(true, for: keep)
+        } else {
+            reconcile()
+        }
     }
 
     public func state(of device: InputDevice) -> DeviceState {

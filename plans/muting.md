@@ -38,6 +38,12 @@ For each current input device:
 "Live" is the user's choice from the menu, defaulting to built-in devices
 (`kAudioDeviceTransportTypeBuiltIn`).
 
+**One Live Mic at a Time** (menu setting, `oneLiveMic` in defaults): making a
+mic live marks every other mic not live — including unplugged ones with a
+remembered choice, so an old USB mic doesn't come back live. Turning the
+setting on with several mics live keeps the built-in one if it's live, else
+the first. Unchecking the live mic is still allowed and leaves none live.
+
 Consequences, each covered by a test in `PedalTests`:
 
 - Re-muting never overwrites the original, so another app raising a muted

@@ -95,6 +95,11 @@ final class StatusItemController: NSObject {
             item.subtitle = subtitle(for: device)
             menu.addItem(item)
         }
+        let oneLive = NSMenuItem(title: "One Live Mic at a Time", action: #selector(toggleOneLiveMic), keyEquivalent: "")
+        oneLive.target = self
+        oneLive.state = pedal.isOneLiveMic ? .on : .off
+        oneLive.subtitle = "Picking a mic mutes the others"
+        menu.addItem(oneLive)
 
         menu.addItem(.separator())
         let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
@@ -131,6 +136,10 @@ final class StatusItemController: NSObject {
             let device = pedal.devices.first(where: { $0.uid == uid })
         else { return }
         pedal.setLive(!pedal.isLive(device), for: device)
+    }
+
+    @objc private func toggleOneLiveMic() {
+        pedal.setOneLiveMic(!pedal.isOneLiveMic)
     }
 
     @objc private func toggleLoginItem() {

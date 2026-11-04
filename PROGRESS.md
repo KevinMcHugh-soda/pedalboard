@@ -46,6 +46,13 @@ device is not rewritten until the next press, and notifications are
 coalesced. Verified: engaged with the same devices, 0.0% CPU after 10 s, and
 an outside volume change to ZoomAudioDevice is still undone within a second.
 
+## One Live Mic at a Time ✅ (tests only)
+
+A menu setting under Keep Live: when on, picking a mic makes it the only
+live one, so the others mute while the pedal is down. Four tests cover
+switching, the old multi-live behaviour, turning it on with several live,
+and unplugged mics. Not yet tried from the real menu.
+
 ## Next
 
 - A global hotkey (Carbon `RegisterEventHotKey` needs no permission).

@@ -46,7 +46,7 @@ enum PedalCommand {
     }
 
     private static func list(_ pedal: Pedal, _ hardware: CoreAudioHardware) {
-        print("pedal: \(pedal.isEngaged ? "on — meeting mics silenced" : "off")")
+        print("pedal: \(pedal.isEngaged ? "on — meeting mics silenced" : "off")\(pedal.isOneLiveMic ? "  (one live mic at a time)" : "")")
         for device in pedal.devices {
             let state =
                 switch pedal.state(of: device) {
