@@ -1,0 +1,131 @@
+/// The one switch: when engaged, every input device that is not live is
+/// silenced; when released, each is put back as it was.
+///
+/// Everything goes through `reconcile()`, which makes the hardware match the
+/// rules and is safe to call any time: on a click, when a device is plugged
+/// in, and when another app turns a silenced device back up (Zoom's automatic
+/// mic level does). Original settings are captured once, the first time a
+/// device is silenced, so re-silencing never overwrites them.
+@MainActor
+public final class Pedal {
+    /// A device that reported success setting its mute switch and is still
+    /// unmuted.
+    public struct IgnoredMute: Error, CustomStringConvertible {
+        public var description: String { "the device ignored its mute switch" }
+    }
+
+    public enum DeviceState: Equatable, Sendable {
+        /// Kept live — never touched.
+        case live
+        /// Silenced by Pedalboard.
+        case silenced
+        /// Not live, but the pedal is up.
+        case open
+        /// Not live, but CoreAudio offers no way to silence it.
+        case unsilenceable
+    }
+
+    public private(set) var devices: [InputDevice] = []
+    /// The last error per device UID, cleared when the device next succeeds.
+    public private(set) var failures: [String: String] = [:]
+    /// Called after every reconcile, so a UI can redraw.
+    public var onChange: (@MainActor () -> Void)?
+
+    private let hardware: AudioHardware
+    private let store: PedalStore
+
+    public init(hardware: AudioHardware, store: PedalStore) {
+        self.hardware = hardware
+        self.store = store
+    }
+
+    /// Reconciles once, then again whenever the audio system changes.
+    public func start() {
+        reconcile()
+        hardware.observeChanges { [weak self] in self?.reconcile() }
+    }
+
+    public var isEngaged: Bool { store.isEngaged }
+
+    public func setEngaged(_ engaged: Bool) {
+        store.isEngaged = engaged
+        reconcile()
+    }
+
+    public func toggle() {
+        setEngaged(!isEngaged)
+    }
+
+    public func isLive(_ device: InputDevice) -> Bool {
+        store.liveOverrides[device.uid] ?? device.isBuiltIn
+    }
+
+    public func setLive(_ live: Bool, for device: InputDevice) {
+        store.liveOverrides[device.uid] = live
+        reconcile()
+    }
+
+    public func state(of device: InputDevice) -> DeviceState {
+        if isLive(device) { return .live }
+        if device.control == .none { return .unsilenceable }
+        return isEngaged ? .silenced : .open
+    }
+
+    /// Devices the pedal should silence but cannot, while it is engaged — the
+    /// ones still hearing you.
+    public var leaks: [InputDevice] {
+        guard isEngaged else { return [] }
+        return devices.filter { state(of: $0) == .unsilenceable || failures[$0.uid] != nil }
+    }
+
+    public func reconcile() {
+        devices = hardware.inputDevices()
+        var saved = store.savedStates
+        for device in devices {
+            do {
+                if isEngaged, !isLive(device), device.control != .none {
+                    try silence(device, saved: &saved)
+                } else if let original = saved[device.uid] {
+                    try restore(device, to: original)
+                    saved[device.uid] = nil
+                }
+                failures[device.uid] = nil
+            } catch {
+                failures[device.uid] = String(describing: error)
+            }
+        }
+        // A device that vanished while silenced keeps its saved state, and is
+        // restored when it next appears with the pedal up.
+        store.savedStates = saved
+        onChange?()
+    }
+
+    private func silence(_ device: InputDevice, saved: inout [String: SavedState]) throws {
+        switch device.control {
+        case .muteSwitch:
+            let muted = hardware.isMuted(device)
+            if saved[device.uid] == nil { saved[device.uid] = .muteSwitch(wasMuted: muted) }
+            if !muted {
+                try hardware.setMuted(true, on: device)
+                // Some virtual devices (Microsoft Teams Audio) accept the
+                // write and stay unmuted. Say so rather than claim it.
+                guard hardware.isMuted(device) else { throw IgnoredMute() }
+            }
+        case .volume:
+            let volume = hardware.volume(of: device)
+            if saved[device.uid] == nil { saved[device.uid] = .volume(volume) }
+            if volume > 0 { try hardware.setVolume(0, on: device) }
+        case .none:
+            break
+        }
+    }
+
+    private func restore(_ device: InputDevice, to original: SavedState) throws {
+        switch original {
+        case .muteSwitch(let wasMuted):
+            if hardware.isMuted(device) != wasMuted { try hardware.setMuted(wasMuted, on: device) }
+        case .volume(let volume):
+            try hardware.setVolume(volume, on: device)
+        }
+    }
+}
