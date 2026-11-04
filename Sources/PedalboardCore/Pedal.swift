@@ -71,6 +71,26 @@ public final class Pedal {
         reconcile()
     }
 
+    /// Makes `device` the only live mic and presses the pedal, so it is the
+    /// one mic still hearing you. Every other mic stops being live —
+    /// unplugged ones too, so an old USB mic doesn't come back live.
+    public func solo(_ device: InputDevice) {
+        var overrides = store.liveOverrides
+        for other in hardware.inputDevices() { overrides[other.uid] = false }
+        for uid in overrides.keys { overrides[uid] = false }
+        overrides[device.uid] = true
+        store.liveOverrides = overrides
+        store.isEngaged = true
+        ignoringMute = []
+        reconcile()
+    }
+
+    /// Whether `device` is soloed: the pedal is down and it is the only live
+    /// mic present.
+    public func isSoloed(_ device: InputDevice) -> Bool {
+        isEngaged && isLive(device) && devices.allSatisfy { $0.uid == device.uid || !isLive($0) }
+    }
+
     public func state(of device: InputDevice) -> DeviceState {
         if isLive(device) { return .live }
         if device.control == .none { return .unsilenceable }

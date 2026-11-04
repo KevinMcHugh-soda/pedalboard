@@ -1,6 +1,7 @@
 import AppKit
 import PedalboardCore
 import ServiceManagement
+import SwiftUI
 
 /// The menu bar icon. A click toggles the pedal; a right-click (or
 /// Control- or Option-click) opens the menu.
@@ -8,6 +9,7 @@ import ServiceManagement
 final class StatusItemController: NSObject {
     private let pedal: Pedal
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private let mixer = MixerModel()
 
     init(pedal: Pedal) {
         self.pedal = pedal
@@ -18,6 +20,8 @@ final class StatusItemController: NSObject {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         pedal.onChange = { [weak self] in self?.update() }
+        mixer.toggleMute = { [weak self] uid in self?.toggleMute(uid) }
+        mixer.solo = { [weak self] uid in self?.solo(uid) }
         update()
     }
 
@@ -32,6 +36,7 @@ final class StatusItemController: NSObject {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
         image?.isTemplate = true
         button.image = image
+        mixer.rows = pedal.devices.map(row)
         // Red while muted, so a glance at the menu bar answers "can they hear
         // me?"; orange when something the pedal should mute still can't be.
         button.contentTintColor = if !engaged { nil } else if leaks.isEmpty { .systemRed } else { .systemOrange }
@@ -81,18 +86,17 @@ final class StatusItemController: NSObject {
         menu.addItem(toggle)
 
         menu.addItem(.separator())
-        menu.addItem(.sectionHeader(title: "Keep Live"))
+        menu.addItem(.sectionHeader(title: "Microphones"))
         if pedal.devices.isEmpty {
             let none = NSMenuItem(title: "No microphones", action: nil, keyEquivalent: "")
             none.isEnabled = false
             menu.addItem(none)
         }
         for device in pedal.devices {
-            let item = NSMenuItem(title: device.name, action: #selector(toggleLive(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = device.uid
-            item.state = pedal.isLive(device) ? .on : .off
-            item.subtitle = subtitle(for: device)
+            let item = NSMenuItem()
+            let view = NSHostingView(rootView: MixerRowView(id: device.uid, model: mixer))
+            view.frame.size = view.fittingSize
+            item.view = view
             menu.addItem(item)
         }
 
@@ -112,25 +116,47 @@ final class StatusItemController: NSObject {
         return menu
     }
 
-    private func subtitle(for device: InputDevice) -> String? {
-        if let failure = pedal.failures[device.uid] { return "Couldn't mute: \(failure)" }
-        return switch pedal.state(of: device) {
-        case .live: "Live"
-        case .silenced: "Muted"
-        case .open: nil
-        case .unsilenceable: "Can't be muted — no mute or volume control"
-        }
+    private func row(_ device: InputDevice) -> MicRow {
+        let mute: MicRow.Mute =
+            switch pedal.state(of: device) {
+            case .live: .live
+            case .open: .armed
+            case .silenced: .muted
+            case .unsilenceable: .unsilenceable
+            }
+        let subtitle =
+            if let failure = pedal.failures[device.uid] {
+                "Couldn't mute: \(failure)"
+            } else if pedal.isSoloed(device) {
+                "Solo"
+            } else {
+                switch mute {
+                case .live: "Live"
+                case .muted: "Muted"
+                case .armed: "Mutes with the pedal"
+                case .unsilenceable: "Can't be muted"
+                }
+            }
+        return MicRow(id: device.uid, name: device.name, mute: mute, isSoloed: pedal.isSoloed(device), subtitle: subtitle)
     }
 
     @objc private func toggleEngaged() {
         pedal.toggle()
     }
 
-    @objc private func toggleLive(_ sender: NSMenuItem) {
-        guard let uid = sender.representedObject as? String,
-            let device = pedal.devices.first(where: { $0.uid == uid })
-        else { return }
+    private func toggleMute(_ uid: String) {
+        guard let device = pedal.devices.first(where: { $0.uid == uid }) else { return }
         pedal.setLive(!pedal.isLive(device), for: device)
+    }
+
+    /// S on a soloed mic lets go of the pedal, so every mic is back on.
+    private func solo(_ uid: String) {
+        guard let device = pedal.devices.first(where: { $0.uid == uid }) else { return }
+        if pedal.isSoloed(device) {
+            pedal.setEngaged(false)
+        } else {
+            pedal.solo(device)
+        }
     }
 
     @objc private func toggleLoginItem() {

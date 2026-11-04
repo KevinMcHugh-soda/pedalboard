@@ -5,7 +5,7 @@
 | Target | Kind | Holds |
 |---|---|---|
 | `PedalboardCore` | library | `AudioHardware` protocol, `CoreAudioHardware`, `Pedal`, `PedalStore`, `AppVariant` |
-| `PedalboardApp` | executable | `AppDelegate`, `StatusItemController`, `AboutPanel` |
+| `PedalboardApp` | executable | `AppDelegate`, `StatusItemController`, `MixerRow` (the per-mic M/S row), `AboutPanel` |
 | `pedal` | executable | The CLI, `Sources/PedalboardCLI` |
 | `PedalboardCoreTests` | tests | `Pedal` against a fake `AudioHardware` |
 

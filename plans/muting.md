@@ -38,6 +38,17 @@ For each current input device:
 "Live" is the user's choice from the menu, defaulting to built-in devices
 (`kAudioDeviceTransportTypeBuiltIn`).
 
+**The mixer row.** Each mic in the menu has two buttons, mixing-desk style:
+
+- **M** toggles whether the mic is live. Lit red = muted now; outlined =
+  mutes when the pedal goes down; dark = live; dimmed = can't be muted.
+- **S** solos: `Pedal.solo(_:)` makes that mic the only live one — every other
+  mic, unplugged ones included, so an old USB mic doesn't come back live —
+  and presses the pedal. Lit yellow while soloed (`isSoloed`: pedal down, the
+  only live mic present). S on a soloed mic releases the pedal.
+
+`pedal solo MIC` does the same from the shell (MIC is a unique name substring).
+
 Consequences, each covered by a test in `PedalTests`:
 
 - Re-muting never overwrites the original, so another app raising a muted
