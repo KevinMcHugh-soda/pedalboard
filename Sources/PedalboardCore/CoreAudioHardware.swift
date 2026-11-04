@@ -22,6 +22,7 @@ public final class CoreAudioHardware: AudioHardware {
     private var systemListeners: [Listener] = []
     private var deviceListeners: [Listener] = []
     private var handler: (@MainActor () -> Void)?
+    private var isHandlerPending = false
 
     public init() {}
 
@@ -156,13 +157,26 @@ public final class CoreAudioHardware: AudioHardware {
         }
     }
 
+    /// Coalesces a burst of notifications — one per channel, or the echo of
+    /// Pedalboard's own writes — into a single call a moment later.
+    private func scheduleHandler() {
+        guard !isHandlerPending else { return }
+        isHandlerPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            MainActor.assumeIsolated {
+                self.isHandlerPending = false
+                self.handler?()
+            }
+        }
+    }
+
     private func addListener(_ object: AudioObjectID, _ address: AudioObjectPropertyAddress, devicesChanged: Bool) -> Listener? {
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             // Registered on the main queue, so this is the main thread.
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if devicesChanged { self.watchDevices() }
-                self.handler?()
+                self.scheduleHandler()
             }
         }
         var address = address

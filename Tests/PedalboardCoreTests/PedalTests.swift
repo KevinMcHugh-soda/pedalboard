@@ -160,4 +160,17 @@ struct PedalTests {
         #expect(pedal.failures["usb"] != nil)
         #expect(pedal.leaks == [usb])
     }
+
+    @Test("A device that ignores its mute switch is not written again on every change")
+    func ignoredMuteIsNotRetried() {
+        let hardware = FakeHardware([builtIn, usb])
+        hardware.ignoresMute = ["usb"]
+        let pedal = Pedal(hardware: hardware, store: MemoryStore())
+        pedal.setEngaged(true)
+        let writes = hardware.writes
+        pedal.reconcile()
+        pedal.reconcile()
+        #expect(hardware.writes == writes)
+        #expect(pedal.leaks == [usb])
+    }
 }

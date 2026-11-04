@@ -36,6 +36,16 @@ About and Quit.
   code path as the devices above, but none was attached.
 - Open at Login (`SMAppService.mainApp`) — not toggled.
 
+## Fix — busy loop on devices that ignore mute ✅
+
+Engaged with Microsoft Teams Audio present, the app sat at ~30% CPU and
+macOS listed it under "Using Significant Energy". `sample` showed
+`Pedal.reconcile()` running continuously: each ignored mute write posted a
+mute-changed notification, which reconciled and wrote again. Now an ignored
+device is not rewritten until the next press, and notifications are
+coalesced. Verified: engaged with the same devices, 0.0% CPU after 10 s, and
+an outside volume change to ZoomAudioDevice is still undone within a second.
+
 ## Next
 
 - A global hotkey (Carbon `RegisterEventHotKey` needs no permission).

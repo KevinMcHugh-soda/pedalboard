@@ -33,6 +33,11 @@ public final class Pedal {
 
     private let hardware: AudioHardware
     private let store: PedalStore
+    /// UIDs of devices that ignored a mute write this engagement. They are
+    /// not written again until the pedal is next pressed: Microsoft Teams
+    /// Audio posts a mute-changed notification for every ignored write, so
+    /// retrying on each notification spins forever.
+    private var ignoringMute: Set<String> = []
 
     public init(hardware: AudioHardware, store: PedalStore) {
         self.hardware = hardware
@@ -49,6 +54,7 @@ public final class Pedal {
 
     public func setEngaged(_ engaged: Bool) {
         store.isEngaged = engaged
+        ignoringMute = []
         reconcile()
     }
 
@@ -106,10 +112,14 @@ public final class Pedal {
             let muted = hardware.isMuted(device)
             if saved[device.uid] == nil { saved[device.uid] = .muteSwitch(wasMuted: muted) }
             if !muted {
+                if ignoringMute.contains(device.uid) { throw IgnoredMute() }
                 try hardware.setMuted(true, on: device)
                 // Some virtual devices (Microsoft Teams Audio) accept the
                 // write and stay unmuted. Say so rather than claim it.
-                guard hardware.isMuted(device) else { throw IgnoredMute() }
+                guard hardware.isMuted(device) else {
+                    ignoringMute.insert(device.uid)
+                    throw IgnoredMute()
+                }
             }
         case .volume:
             let volume = hardware.volume(of: device)

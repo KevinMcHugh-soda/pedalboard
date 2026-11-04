@@ -23,7 +23,9 @@ it from its own mute button.
 Some virtual devices (Microsoft Teams Audio, as of 2026-11) report a settable
 mute switch, accept the write with `noErr`, and stay unmuted. `Pedal` reads the
 switch back after writing and records `IgnoredMute` as a failure, which also
-shows as orange.
+shows as orange. It does not write to that device again until the pedal is
+next pressed: Teams Audio posts a mute-changed notification for every ignored
+write, and retrying on each one spun the app at ~30% CPU.
 
 ## The rules (`Pedal.reconcile`)
 
@@ -53,4 +55,5 @@ Consequences, each covered by a test in `PedalTests`:
 `CoreAudioHardware.observeChanges` listens on the main queue for
 `kAudioHardwarePropertyDevices` on the system object, and for mute and volume
 (wildcard element) on every input device. The per-device listeners are
-replaced whenever the device list changes.
+replaced whenever the device list changes. Notifications are coalesced: a
+burst within 100 ms becomes one reconcile.
