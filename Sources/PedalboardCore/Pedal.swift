@@ -67,32 +67,28 @@ public final class Pedal {
     }
 
     public func setLive(_ live: Bool, for device: InputDevice) {
-        var overrides = store.liveOverrides
-        if live, isOneLiveMic {
-            // Every other mic, present or unplugged, stops being live — so a
-            // remembered USB mic doesn't come back live when it reappears.
-            for other in devices where other.uid != device.uid { overrides[other.uid] = false }
-            for uid in overrides.keys where uid != device.uid { overrides[uid] = false }
-        }
-        overrides[device.uid] = live
-        store.liveOverrides = overrides
+        store.liveOverrides[device.uid] = live
         reconcile()
     }
 
-    /// When on, making a mic live makes it the only live mic.
-    public var isOneLiveMic: Bool { store.isOneLiveMic }
+    /// Makes `device` the only live mic and presses the pedal, so it is the
+    /// one mic still hearing you. Every other mic stops being live —
+    /// unplugged ones too, so an old USB mic doesn't come back live.
+    public func solo(_ device: InputDevice) {
+        var overrides = store.liveOverrides
+        for other in hardware.inputDevices() { overrides[other.uid] = false }
+        for uid in overrides.keys { overrides[uid] = false }
+        overrides[device.uid] = true
+        store.liveOverrides = overrides
+        store.isEngaged = true
+        ignoringMute = []
+        reconcile()
+    }
 
-    /// Turning it on with several mics live keeps one: the built-in mic if it
-    /// is live, otherwise the first live mic.
-    public func setOneLiveMic(_ on: Bool) {
-        store.isOneLiveMic = on
-        guard on else { return reconcile() }
-        let live = devices.filter(isLive)
-        if let keep = live.first(where: \.isBuiltIn) ?? live.first {
-            setLive(true, for: keep)
-        } else {
-            reconcile()
-        }
+    /// Whether `device` is soloed: the pedal is down and it is the only live
+    /// mic present.
+    public func isSoloed(_ device: InputDevice) -> Bool {
+        isEngaged && isLive(device) && devices.allSatisfy { $0.uid == device.uid || !isLive($0) }
     }
 
     public func state(of device: InputDevice) -> DeviceState {

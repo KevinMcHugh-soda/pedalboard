@@ -46,12 +46,16 @@ device is not rewritten until the next press, and notifications are
 coalesced. Verified: engaged with the same devices, 0.0% CPU after 10 s, and
 an outside volume change to ZoomAudioDevice is still undone within a second.
 
-## One Live Mic at a Time ✅ (tests only)
+## Mixer rows: per-mic M and S ✅ (rendered, not clicked)
 
-A menu setting under Keep Live: when on, picking a mic makes it the only
-live one, so the others mute while the pedal is down. Four tests cover
-switching, the old multi-live behaviour, turning it on with several live,
-and unplugged mics. Not yet tried from the real menu.
+Each mic in the menu is a SwiftUI row (`MixerRow.swift`, hosted in the menu
+item's view) with **M** (toggle live) and **S** (solo: only this mic live,
+pedal down; again to release). Buttons don't close the menu, so rows read an
+`@Observable MixerModel` refreshed on every reconcile, and every row always
+has a subtitle so its height never changes while open. Replaces a short-lived
+"One Live Mic at a Time" setting. Four solo tests; the row was rendered
+offscreen with `ImageRenderer` in light and dark and looks right. Not yet
+clicked in the real menu.
 
 ## Next
 

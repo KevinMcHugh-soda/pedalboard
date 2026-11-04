@@ -174,47 +174,51 @@ struct PedalTests {
         #expect(pedal.leaks == [usb])
     }
 
-    @Test("With one live mic at a time, picking a mic mutes the one that was live")
-    func oneLiveMicSwitches() {
+    @Test("Soloing a mic keeps only it live and presses the pedal")
+    func soloMutesTheOthers() {
         let hardware = FakeHardware([builtIn, usb, interface])
         let pedal = Pedal(hardware: hardware, store: MemoryStore())
-        pedal.setOneLiveMic(true)
-        pedal.setEngaged(true)
-        pedal.setLive(true, for: usb)
+        pedal.solo(usb)
+        #expect(pedal.isEngaged)
         #expect(pedal.devices.filter(pedal.isLive) == [usb])
-        #expect(hardware.muted["usb"] == false)
+        #expect(pedal.isSoloed(usb))
+        #expect(hardware.muted["usb"] != true)
         #expect(hardware.volumes["builtin"] == 0)
+        #expect(hardware.volumes["interface"] == 0)
     }
 
-    @Test("Without it, picking a mic keeps the others live")
-    func severalLiveMics() {
+    @Test("Soloing another mic moves the solo")
+    func soloMoves() {
+        let hardware = FakeHardware([builtIn, usb])
+        let pedal = Pedal(hardware: hardware, store: MemoryStore())
+        pedal.solo(usb)
+        pedal.solo(builtIn)
+        #expect(hardware.muted["usb"] == true)
+        #expect(hardware.volumes["builtin"] == 0.8)
+        #expect(pedal.isSoloed(builtIn))
+        #expect(!pedal.isSoloed(usb))
+    }
+
+    @Test("A mic with another live mic beside it is not soloed")
+    func notSoloedWithCompany() {
         let hardware = FakeHardware([builtIn, usb])
         let pedal = Pedal(hardware: hardware, store: MemoryStore())
         pedal.setLive(true, for: usb)
-        #expect(pedal.devices.filter(pedal.isLive) == [builtIn, usb])
+        pedal.setEngaged(true)
+        #expect(!pedal.isSoloed(usb))
+        #expect(!pedal.isSoloed(builtIn))
     }
 
-    @Test("Turning it on with several mics live keeps only the built-in one")
-    func turningOnKeepsBuiltIn() {
-        let hardware = FakeHardware([usb, builtIn, interface])
-        let pedal = Pedal(hardware: hardware, store: MemoryStore())
-        pedal.setLive(true, for: usb)
-        pedal.setLive(true, for: interface)
-        pedal.setOneLiveMic(true)
-        #expect(pedal.devices.filter(pedal.isLive) == [builtIn])
-    }
-
-    @Test("A mic that was live while unplugged comes back not live")
-    func unpluggedMicNotLive() {
+    @Test("A mic that was live while unplugged comes back muted after a solo")
+    func unpluggedMicNotLiveAfterSolo() {
         let hardware = FakeHardware([builtIn, usb])
         let pedal = Pedal(hardware: hardware, store: MemoryStore())
-        pedal.setOneLiveMic(true)
         pedal.setLive(true, for: usb)
         hardware.devices = [builtIn]
         pedal.reconcile()
-        pedal.setLive(true, for: builtIn)
+        pedal.solo(builtIn)
         hardware.devices = [builtIn, usb]
         pedal.reconcile()
-        #expect(pedal.devices.filter(pedal.isLive) == [builtIn])
+        #expect(hardware.muted["usb"] == true)
     }
 }

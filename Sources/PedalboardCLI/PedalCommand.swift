@@ -17,6 +17,7 @@ enum PedalCommand {
           on        silence every device that is not live
           off       put every silenced device back as it was
           toggle    on if off, off if on
+          solo MIC  keep only the device named MIC live, and turn on
           version   the build's variant
         """
 
@@ -37,6 +38,16 @@ enum PedalCommand {
         case "toggle":
             pedal.toggle()
             list(pedal, hardware)
+        case "solo":
+            pedal.reconcile()
+            let name = arguments.dropFirst().joined(separator: " ")
+            let matches = pedal.devices.filter { $0.name.localizedCaseInsensitiveContains(name) }
+            guard !name.isEmpty, matches.count == 1, let device = matches.first else {
+                print(matches.isEmpty ? "no device matches \"\(name)\"" : "\"\(name)\" matches \(matches.map(\.name).joined(separator: ", "))")
+                exit(1)
+            }
+            pedal.solo(device)
+            list(pedal, hardware)
         case "version":
             print("\(AppVariant.current.appName) (\(AppVariant.current.bundleIdentifier))")
         default:
@@ -46,7 +57,7 @@ enum PedalCommand {
     }
 
     private static func list(_ pedal: Pedal, _ hardware: CoreAudioHardware) {
-        print("pedal: \(pedal.isEngaged ? "on — meeting mics silenced" : "off")\(pedal.isOneLiveMic ? "  (one live mic at a time)" : "")")
+        print("pedal: \(pedal.isEngaged ? "on — meeting mics silenced" : "off")")
         for device in pedal.devices {
             let state =
                 switch pedal.state(of: device) {

@@ -17,8 +17,6 @@ public protocol PedalStore: AnyObject {
     var savedStates: [String: SavedState] { get set }
     /// By device UID. A device with no entry is live if it is built in.
     var liveOverrides: [String: Bool] { get set }
-    /// Whether making a mic live makes every other mic not live.
-    var isOneLiveMic: Bool { get set }
 }
 
 /// `PedalStore` in the variant's UserDefaults domain, which the app and the
@@ -48,11 +46,6 @@ public final class DefaultsStore: PedalStore {
         get { defaults.dictionary(forKey: "liveOverrides") as? [String: Bool] ?? [:] }
         set { defaults.set(newValue, forKey: "liveOverrides") }
     }
-
-    public var isOneLiveMic: Bool {
-        get { defaults.bool(forKey: "oneLiveMic") }
-        set { defaults.set(newValue, forKey: "oneLiveMic") }
-    }
 }
 
 /// `PedalStore` that forgets everything on exit.
@@ -61,7 +54,6 @@ public final class MemoryStore: PedalStore {
     public var isEngaged = false
     public var savedStates: [String: SavedState] = [:]
     public var liveOverrides: [String: Bool] = [:]
-    public var isOneLiveMic = false
 
     public init() {}
 }
